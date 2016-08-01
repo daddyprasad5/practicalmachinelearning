@@ -11,7 +11,7 @@ My strategy for building the model was as follows:
 * create a support vector machine (svm) model
 * stack the two models to see if I might gain predictive power.
 
-The R code used to create the models and to assess out-of-sample error rates is available in the markdown version of this document [here](https://github.com/daddyprasad5/practicalmachinelearning)  Highlights: 
+The R code used to create the models and to assess out-of-sample error rates is available in the markdown version of this document [here](https://github.com/daddyprasad5/practicalmachinelearning/blob/gh-pages/index.Rmd)  Highlights: 
 
 * After initial data exploration, I reduced the potential predictors to 52 columns that were not largely empty / NA or simply irrelevant to prediction (e.g. date, subject name). 
 * The 52 potential predictors were given to the caret package train (method = glm) functions and e1071 package svm function to train the base models
