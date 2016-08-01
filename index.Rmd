@@ -1,0 +1,100 @@
+#Exercise Quality Prediction
+
+My goal is to predict the manner in which subjects perform dumbell lifts - i.e. correctly or, if incorrectly, then in what way incorrectly. I will use data from accelerometers placed on the each subject's belt, forearm, arm, and dumbell. The subjects were asked to perform barbell lifts in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+
+##Model Construction
+My strategy for building the model was as follows: 
+
+* reduce the candidate variables to those with meaningful levels of data
+* split the data into training, test, and validation sets
+* create a boosted version of a regression trees model (gbm)
+* create a support vector machine (svm) model
+* stack the two models to see if I might gain predictive power.
+
+The R code used to create the models and to assess out-of-sample error rates is available in the markdown version of this document [here](https://github.com/daddyprasad5/practicalmachinelearning)  Highlights: 
+
+* After initial data exploration, I reduced the potential predictors to 52 columns that were not largely empty / NA or simply irrelevant to prediction (e.g. date, subject name). 
+* The 52 potential predictors were given to the caret package train (method = glm) functions and e1071 package svm function to train the base models
+* The boosted regression trees model (glm) predicted with 96% accuracy the classe of the test observations (4% out-of-sample error rate).
+* The support vector machine model (svm) predicted with 93% accuracy the classe of the test observations (7% out-of-sample error rate).
+* The predictions of the two base models agree 93% of the time. 
+* When the two models agree, they correctly predict the classe of the test data 98% of the time. 
+* I fit a stacked glm model on the test data using the svm and glm base models' predictors as input, and this stacked model predicted with 100% accuracy the classe of the validation observations (0% out-of-sample error rate).
+
+
+```{r echo=FALSE, cache=TRUE, warnings=FALSE, message=FALSE}
+## load required packages
+library(caret)
+library(data.table)
+library(ISLR)
+library(e1071)
+```
+
+```{r echo=FALSE, cache = TRUE}
+## load data 
+dat <- fread("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+validation <- fread("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+```{r echo=FALSE, cache=TRUE, warnings=FALSE, message=FALSE}
+#create a subset of the data that includes only those columns with meaningful data.  
+subdat <- data.frame( total_accel_forearm=dat$total_accel_forearm, gyros_forearm_x=dat$gyros_forearm_x, gyros_forearm_y=dat$gyros_forearm_y, gyros_forearm_z=dat$gyros_forearm_z, accel_forearm_x=dat$accel_forearm_x, accel_forearm_y=dat$accel_forearm_y, accel_forearm_z=dat$accel_forearm_z, magnet_forearm_x=dat$magnet_forearm_x, magnet_forearm_y=dat$magnet_forearm_y, magnet_forearm_z=dat$magnet_forearm_z, roll_forearm=dat$roll_forearm, pitch_forearm=dat$pitch_forearm, yaw_forearm=dat$yaw_forearm, total_accel_dumbbell=dat$total_accel_dumbbell, gyros_dumbbell_x=dat$gyros_dumbbell_x, gyros_dumbbell_y=dat$gyros_dumbbell_y, gyros_dumbbell_z=dat$gyros_dumbbell_z, accel_dumbbell_x=dat$accel_dumbbell_x, accel_dumbbell_y=dat$accel_dumbbell_y, accel_dumbbell_z=dat$accel_dumbbell_z, magnet_dumbbell_x=dat$magnet_dumbbell_x, magnet_dumbbell_y=dat$magnet_dumbbell_y, magnet_dumbbell_z=dat$magnet_dumbbell_z, roll_dumbbell=dat$roll_dumbbell, pitch_dumbbell=dat$pitch_dumbbell, yaw_dumbbell=dat$yaw_dumbbell, total_accel_arm=dat$total_accel_arm, gyros_arm_x=dat$gyros_arm_x, gyros_arm_y=dat$gyros_arm_y, gyros_arm_z=dat$gyros_arm_z, accel_arm_x=dat$accel_arm_x, accel_arm_y=dat$accel_arm_y, accel_arm_z=dat$accel_arm_z, magnet_arm_x=dat$magnet_arm_x, magnet_arm_y=dat$magnet_arm_y, magnet_arm_z=dat$magnet_arm_z, roll_arm=dat$roll_arm, pitch_arm=dat$pitch_arm, yaw_arm=dat$yaw_arm, total_accel_belt=dat$total_accel_belt, gyros_belt_x=dat$gyros_belt_x, gyros_belt_y=dat$gyros_belt_y, gyros_belt_z=dat$gyros_belt_z, accel_belt_x=dat$accel_belt_x, accel_belt_y=dat$accel_belt_y, accel_belt_z=dat$accel_belt_z, magnet_belt_x=dat$magnet_belt_x, magnet_belt_y=dat$magnet_belt_y, magnet_belt_z=dat$magnet_belt_z, roll_belt=dat$roll_belt, pitch_belt=dat$pitch_belt, yaw_belt=dat$yaw_belt, classe = dat$classe)
+```
+
+```{r echo=FALSE, cache=TRUE, warnings=FALSE, message=FALSE}
+##separate the data into training and test data
+inTrain <- createDataPartition(y=subdat$classe, p=0.6, list=FALSE)
+training = subdat[inTrain,]
+testing = subdat[-inTrain,]
+
+#fit the models (commented out long-running model-builds - remove comments to run)
+gbmFit <- train(classe ~., method = "gbm", data = training, verbose = FALSE)
+gbmPred <- predict(gbmFit, testing)
+svmFit <- svm(classe ~., data = training)
+svmPred <- predict(svmFit, testing)
+```
+
+```{r echo=FALSE, cache=TRUE, warnings=FALSE, message=FALSE}
+#build comparison dataframe for reporting accuracy & error rates
+compare <- data.frame(gbmPred, svmPred, testing$classe)
+compare$gbmRight <- gbmPred == testing$classe
+compare$svmRight <- svmPred == testing$classe
+compare$gbmsvmSame = gbmPred == svmPred
+compare$agreeCorrect = compare$gbmsvmSame & compare$gbmRight
+gbmsvmAgree = nrow(compare[compare$gbmsvmSame == TRUE,]) / nrow(testing)
+
+##report accurace rates. Error rates are 1 - accuracy
+gbmOOSAccuracy = nrow(compare[compare$gbmRight == TRUE,]) / nrow(testing)
+svmOOSAccuracy = nrow(compare[compare$svmRight == TRUE,]) / nrow(testing)
+gbmsvmAgreeAccuracy = nrow(compare[compare$agreeCorrect == TRUE,]) / nrow(compare[compare$gbmsvmSame == TRUE,])
+```
+
+```{r echo=FALSE, cache=TRUE, warnings=FALSE, message=FALSE}
+##build the stacked model on the test data
+predDF <- data.frame(gbmPred, svmPred, classe = testing$classe)
+combModFit <- train(classe~., method = "gbm", data = predDF, verbose = FALSE)
+combPred <- predict(combModFit, data = predDF)
+compare$combRight <- combPred == testing$classe
+
+##predict the validation observations with all 3 models
+gbmPredVal <- predict(gbmFit, validation)
+svmPredVal <- predict(svmFit, validation)
+predVDF <- data.frame(gbmPred = gbmPredVal, svmPred = svmPredVal)
+combPredV <- predict(combModFit, predVDF)
+```
+
+
+##Cross validation
+I used random sub-sampling to create training and test sets from the "training" data given by the professor.  I used my training subset to train multiple models and the test subset to assess the out-of-sample accuracy of each model and to train a stacked model that combined the two base models.  The "test" data given by the professor (20 observations) I left for out-of-sample error assessment for the final stacked model.   
+
+##Expected out of sample error
+I can speak with confidence about the out-of-sample error rates for the gbm (4%) and svm (7%), but not for the stacked model.  While the stacked model achieved 100% accuracy in predicting the classe of the 20 validation observations, so did the the svm and gbm models.  (This according to the "quiz" resuts that test the 20 predictions; the outcome can't be displayed in the markdown file.)  If I were to rework this analysis, I would reserve a larger number of the given "training" dataset for validation so I could better assess the out-of-sample error for the stacked model. 
+
+Here are the comparisons of each of the 3 model predictions to the actual classe observations in the test dataset. 
+
+```{r}
+table(gbmPred, testing$classe)
+table(svmPred, testing$classe)
+table(combPred, testing$classe)
+```
+
